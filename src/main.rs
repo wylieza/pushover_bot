@@ -1,10 +1,12 @@
 extern crate pushover_rs;
 
 use std::env;
-use pushover_rs::{Message, MessageBuilder, PushoverResponse, PushoverSound, send_pushover_request};
+use std::net::TcpStream;
+use std::time::Duration;
+use pushover_rs::{Message, MessageBuilder, PushoverSound, send_pushover_request};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-struct Pushover_Credentials {
+struct PushoverCredentials {
     user: String,
     api_key: String,
 }
@@ -12,12 +14,16 @@ struct Pushover_Credentials {
 #[tokio::main]
 async fn main() {
     println!("Hello, world!");
+    if !simple_wait_internet() {
+        println!("unable to connect to internet!");
+        return;
+    }
     if let Some(creds) = pushover_credentials_from_env() {
         reboot_notification(&creds).await;
     }
 }
 
-fn pushover_credentials_from_env() -> Option::<Pushover_Credentials> {
+fn pushover_credentials_from_env() -> Option::<PushoverCredentials> {
     let pushover_user_key_var = "PUSHOVER_USER_KEY";
     let pushover_bot_key_var = "PUSHOVER_GENERAL_PURPOSE_BOT_KEY";
 
@@ -28,13 +34,13 @@ fn pushover_credentials_from_env() -> Option::<Pushover_Credentials> {
         return None;
     }
 
-    Some(Pushover_Credentials {
+    Some(PushoverCredentials {
         user: user_key.unwrap(),
         api_key: bot_key.unwrap(),
     })
 }
 
-async fn reboot_notification(credentials: &Pushover_Credentials) {
+async fn reboot_notification(credentials: &PushoverCredentials) {
     let duration_since_epoch = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
     let now: u64 = duration_since_epoch.as_secs();
 
@@ -49,4 +55,30 @@ async fn reboot_notification(credentials: &Pushover_Credentials) {
         Ok(_) => println!("all okay!"),
         Err(err) => {dbg!(err);},
     };
+}
+
+fn simple_wait_internet() -> bool {
+    let retry_interval = Duration::from_secs(5);
+    const MAX_RETRIES: u32 = 12;
+
+    let mut retry_count = 0;
+
+    // Loop until a valid internet connection is established
+    loop {
+        match TcpStream::connect("example.com:80") {
+            Ok(_) => {
+                return true;
+            }
+            Err(_) => {
+                retry_count += 1;
+            }
+        }
+
+        if retry_count > MAX_RETRIES {
+            return false;
+        }
+
+        // Sleep for a while before the next retry
+        std::thread::sleep(retry_interval);
+    }
 }
